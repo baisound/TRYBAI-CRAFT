@@ -1,9 +1,13 @@
 name: Build MinecraftForge
 
 on:
+
+defaults:
+  run:
+    working-directory: MinecraftForge
+
   workflow_dispatch:
-    paths:
-      - 'MinecraftForge/**'
+
 
 jobs:
   build:
@@ -28,7 +32,6 @@ jobs:
     - name: Initialize Gradle Project
       shell: cmd
       run: |
-        cd MinecraftForge
         mkdir build
         echo "plugins { id 'java' }" > build.gradle
         mkdir -p gradle/wrapper
@@ -54,7 +57,6 @@ jobs:
     - name: Build MinecraftForge
       shell: cmd
       run: |
-        cd MinecraftForge
         gradlew.bat --no-daemon --stacktrace --info setupDecompWorkspace
         gradlew.bat --no-daemon --stacktrace --info build
       env:
