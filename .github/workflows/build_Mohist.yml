@@ -2,12 +2,9 @@ name: Build Mohist for Windows
 
 on:
   workflow_dispatch:
-  push:
-    branches: [ "1.20.1" ]
     paths:
       - 'Mohist/**'
-  pull_request:
-    branches: [ "1.20.1" ]
+
 
 jobs:
   build-windows:
@@ -30,31 +27,40 @@ jobs:
         architecture: 'x64'
         cache: gradle
 
+    - name: Create Gradle Project Structure
+      shell: cmd
+      run: |
+        cd Mohist
+        echo plugins { id 'java' } > build.gradle
+        mkdir -p gradle\wrapper
+        echo distributionBase=GRADLE_USER_HOME > gradle\wrapper\gradle-wrapper.properties
+        echo distributionPath=wrapper/dists >> gradle\wrapper\gradle-wrapper.properties
+        echo distributionUrl=https\://services.gradle.org/distributions/gradle-8.4-bin.zip >> gradle\wrapper\gradle-wrapper.properties
+        echo zipStoreBase=GRADLE_USER_HOME >> gradle\wrapper\gradle-wrapper.properties
+        echo zipStorePath=wrapper/dists >> gradle\wrapper\gradle-wrapper.properties
+        echo org.gradle.daemon=false > gradle.properties
+
     - name: Setup Gradle
       uses: gradle/gradle-build-action@v2
       with:
         gradle-version: '8.4'
-        cache-read-only: false
+        gradle-home-cache-cleanup: true
 
-    - name: Setup Gradle Wrapper
+    - name: Download Gradle Wrapper
       shell: cmd
       run: |
         cd Mohist
-        mkdir gradle\wrapper 2>nul
-        echo distributionBase=GRADLE_USER_HOME> gradle\wrapper\gradle-wrapper.properties
-        echo distributionPath=wrapper/dists>> gradle\wrapper\gradle-wrapper.properties
-        echo distributionUrl=https\://services.gradle.org/distributions/gradle-8.4-bin.zip>> gradle\wrapper\gradle-wrapper.properties
-        echo zipStoreBase=GRADLE_USER_HOME>> gradle\wrapper\gradle-wrapper.properties
-        echo zipStorePath=wrapper/dists>> gradle\wrapper\gradle-wrapper.properties
         curl -L -o gradlew.bat https://raw.githubusercontent.com/gradle/gradle/v8.4.0/gradlew.bat
         curl -L -o gradle\wrapper\gradle-wrapper.jar https://raw.githubusercontent.com/gradle/gradle/v8.4.0/gradle/wrapper/gradle-wrapper.jar
+        gradlew.bat --version
 
     - name: Build Mohist
       shell: cmd
       run: |
         cd Mohist
-        gradlew.bat --no-daemon --stacktrace setup packageLibraries
-        gradlew.bat --no-daemon --stacktrace mohistJar
+        gradlew.bat --no-daemon --stacktrace --info setup
+        gradlew.bat --no-daemon --stacktrace --info packageLibraries
+        gradlew.bat --no-daemon --stacktrace --info mohistJar
       env:
         JAVA_OPTS: "-Xmx4G -Xms1G"
         GRADLE_OPTS: "-Dorg.gradle.daemon=false"
@@ -62,7 +68,7 @@ jobs:
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: Mohist-1.20.1-windows-x64
+        name: mohist-1.20.1-windows-x64-${{ github.sha }}
         path: |
           Mohist/projects/mohist/build/libs/*-server.jar
           Mohist/projects/mohist/build/libs/*-installer.jar
