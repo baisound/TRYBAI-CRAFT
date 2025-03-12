@@ -2,11 +2,13 @@ name: Build MinecraftForge
 
 on:
   workflow_dispatch:
+    paths:
+      - 'MinecraftForge/**'
 
 jobs:
   build:
-    runs-on: ubuntu-latest
-    name: Build MinecraftForge
+    runs-on: windows-latest
+    name: Build MinecraftForge Windows x64
 
     steps:
     - name: Checkout repository
@@ -17,20 +19,24 @@ jobs:
       with:
         distribution: 'temurin'
         java-version: '17'
+        architecture: 'x64'
 
     - name: Setup Gradle
       uses: gradle/gradle-build-action@v2
-
-    - name: Grant execute permission for gradlew
-      run: chmod +x ./gradlew
+      with:
+        gradle-version: '8.4'
 
     - name: Build with Gradle
+      shell: cmd
       run: |
-        ./gradlew setupDecompWorkspace
-        ./gradlew build
+        gradlew.bat setupDecompWorkspace --max-workers 1
+        gradlew.bat build
+      env:
+        JAVA_OPTS: "-Xmx4G -Xms1G"
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: forge-artifacts
+        name: forge-windows-x64
         path: build/libs/*.jar
+        retention-days: 7
