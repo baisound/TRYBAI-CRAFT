@@ -29,6 +29,10 @@ jobs:
     - name: Build with Gradle
       shell: cmd
       run: |
+        cd MinecraftForge
+        if not exist "gradlew.bat" powershell -Command "(New-Object Net.WebClient).DownloadFile('https://raw.githubusercontent.com/gradle/gradle/master/gradlew.bat', 'gradlew.bat')"
+        if not exist "gradle/wrapper/gradle-wrapper.jar" mkdir gradle\wrapper & powershell -Command "(New-Object Net.WebClient).DownloadFile('https://raw.githubusercontent.com/gradle/gradle-wrapper/master/gradle/wrapper/gradle-wrapper.jar', 'gradle/wrapper/gradle-wrapper.jar')"
+        gradlew.bat --version
         gradlew.bat setupDecompWorkspace --max-workers 1
         gradlew.bat build
       env:
@@ -38,5 +42,5 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: forge-windows-x64
-        path: build/libs/*.jar
+        path: MinecraftForge/build/libs/*.jar
         retention-days: 7

@@ -71,8 +71,23 @@ jobs:
         architecture: 'x64'
         cache: 'gradle'
 
+    - name: Setup Gradle Wrapper
+      run: |
+        mkdir -p Mohist/gradle/wrapper
+        echo -e "distributionBase=GRADLE_USER_HOME\ndistributionPath=wrapper/dists\ndistributionUrl=https\://services.gradle.org/distributions/gradle-8.4-bin.zip\nzipStoreBase=GRADLE_USER_HOME\nzipStorePath=wrapper/dists" > Mohist/gradle/wrapper/gradle-wrapper.properties
+
+    - name: Download Gradle Wrapper
+      shell: cmd
+      run: |
+        cd Mohist
+        powershell -Command "(New-Object Net.WebClient).DownloadFile('https://raw.githubusercontent.com/gradle/gradle/master/gradlew.bat', 'gradlew.bat')"
+        mkdir -p gradle\wrapper
+        powershell -Command "(New-Object Net.WebClient).DownloadFile('https://raw.githubusercontent.com/gradle/gradle-wrapper/master/gradle/wrapper/gradle-wrapper.jar', 'gradle/wrapper/gradle-wrapper.jar')"
+
     - name: Setup Gradle
       uses: gradle/gradle-build-action@v2
+      with:
+        gradle-version: '8.4'
 
     - name: Build Mohist
       shell: cmd
