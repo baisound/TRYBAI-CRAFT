@@ -13,6 +13,9 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
+      with:
+        lf-line-endings: true
+        submodules: true
 
     - name: Setup Visual Studio
       uses: microsoft/setup-msbuild@v1.3
@@ -20,7 +23,10 @@ jobs:
     - name: Install Cygwin
       uses: cygwin/cygwin-install-action@v4
       with:
-        packages: make gcc-core gcc-g++ zip unzip autoconf m4 perl libpng-devel libiconv-devel
+        packages: >-
+          make gcc-core gcc-g++ zip unzip autoconf m4
+          perl libpng-devel libiconv-devel file findutils
+          tar cpio wget gawk
 
     - name: Setup Boot JDK
       uses: actions/setup-java@v4
@@ -29,14 +35,27 @@ jobs:
         java-version: '17'
         architecture: 'x64'
 
-    - name: Configure and Build
+    - name: Prepare Build Environment
       shell: bash
       run: |
-        cd OpenJDK
-        export PATH="/usr/bin:$PATH"
-        export JAVA_HOME_BACKUP=$JAVA_HOME
-        export JAVA_HOME=$(cygpath -u "$JAVA_HOME_BACKUP")
-        bash configure --with-boot-jdk=$JAVA_HOME --with-target-bits=64 --disable-warnings-as-errors
-        make images
-      env:
-        JAVA_OPTS: "-Xmx4G -Xms1G"
+        OPENJDK_DIR="$(cygpath -u "$(pwd)/OpenJDK")"
+        echo "OPENJDK_DIR=$OPENJDK_DIR" >> $GITHUB_ENV
+        echo "PATH=/usr/bin:$PATH" >> $GITHUB_ENV
+        echo "JAVA_HOME=$(cygpath -u "$JAVA_HOME")" >> $GITHUB_ENV
+
+    - name: Build OpenJDK
+      uses: ./OpenJDK/.github/actions/do-build
+      with:
+        make-target: 'images'
+        platform: 'windows-x64'
+        debug-suffix: ''
+
+    - name: Upload Built JDK
+      uses: actions/upload-artifact@v4
+      if: success()
+      with:
+        name: jdk-windows-x64
+        path: |
+          OpenJDK/build/*/images/jdk
+          OpenJDK/build/*/images/jre
+        retention-days: 7

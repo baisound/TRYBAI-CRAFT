@@ -13,6 +13,8 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
+      with:
+        lf-line-endings: true  # 改行コードを LF に統一
 
     - name: Setup JDK 17
       uses: actions/setup-java@v4
@@ -20,23 +22,36 @@ jobs:
         distribution: 'temurin'
         java-version: '17'
         architecture: 'x64'
+        cache: gradle
 
     - name: Setup Gradle
       uses: gradle/gradle-build-action@v2
       with:
         gradle-version: '8.4'
+        gradle-home-cache-cleanup: true
+
+    - name: Setup Gradle Wrapper
+      shell: cmd
+      run: |
+        cd MinecraftForge
+        mkdir gradle\wrapper 2>nul
+        echo distributionBase=GRADLE_USER_HOME> gradle\wrapper\gradle-wrapper.properties
+        echo distributionPath=wrapper/dists>> gradle\wrapper\gradle-wrapper.properties
+        echo distributionUrl=https\://services.gradle.org/distributions/gradle-8.4-bin.zip>> gradle\wrapper\gradle-wrapper.properties
+        echo zipStoreBase=GRADLE_USER_HOME>> gradle\wrapper\gradle-wrapper.properties
+        echo zipStorePath=wrapper/dists>> gradle\wrapper\gradle-wrapper.properties
+        curl -L -o gradlew.bat https://raw.githubusercontent.com/gradle/gradle/v8.4.0/gradlew.bat
+        curl -L -o gradle\wrapper\gradle-wrapper.jar https://raw.githubusercontent.com/gradle/gradle/v8.4.0/gradle/wrapper/gradle-wrapper.jar
 
     - name: Build with Gradle
       shell: cmd
       run: |
         cd MinecraftForge
-        if not exist "gradlew.bat" powershell -Command "(New-Object Net.WebClient).DownloadFile('https://raw.githubusercontent.com/gradle/gradle/master/gradlew.bat', 'gradlew.bat')"
-        if not exist "gradle/wrapper/gradle-wrapper.jar" mkdir gradle\wrapper & powershell -Command "(New-Object Net.WebClient).DownloadFile('https://raw.githubusercontent.com/gradle/gradle-wrapper/master/gradle/wrapper/gradle-wrapper.jar', 'gradle/wrapper/gradle-wrapper.jar')"
-        gradlew.bat --version
-        gradlew.bat setupDecompWorkspace --max-workers 1
-        gradlew.bat build
+        gradlew.bat --no-daemon --stacktrace setupDecompWorkspace --max-workers 1
+        gradlew.bat --no-daemon --stacktrace build
       env:
         JAVA_OPTS: "-Xmx4G -Xms1G"
+        GRADLE_OPTS: "-Dorg.gradle.daemon=false"
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
