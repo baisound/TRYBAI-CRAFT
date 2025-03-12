@@ -1,0 +1,169 @@
+#
+# Copyright (c) 2022, 2024, Oracle and/or its affiliates. All rights reserved.
+# DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+#
+# This code is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License version 2 only, as
+# published by the Free Software Foundation.  Oracle designates this
+# particular file as subject to the "Classpath" exception as provided
+# by Oracle in the LICENSE file that accompanied this code.
+#
+# This code is distributed in the hope that it will be useful, but WITHOUT
+# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+# FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+# version 2 for more details (a copy is included in the LICENSE file that
+# accompanied this code).
+#
+# You should have received a copy of the GNU General Public License version
+# 2 along with this work; if not, write to the Free Software Foundation,
+# Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+#
+# Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+# or visit www.oracle.com if you need additional information or have any
+# questions.
+#
+
+name: 'Build OpenJDK'
+
+defaults:
+  run:
+    working-directory: ./OpenJDK
+
+on:
+  workflow_dispatch:
+    inputs:
+      platforms:
+        description: 'Platform(s) to execute on (comma separated, e.g. "linux-x64, macos, aarch64")'
+        required: true
+        default: 'windows-x64, windows-aarch64'
+      configure-arguments:
+        description: 'Additional configure arguments'
+        required: false
+      make-arguments:
+        description: 'Additional make arguments'
+        required: false
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+
+  ###
+  ### Determine platforms to include
+  ###
+
+  prepare:
+    name: 'Prepare the run'
+    runs-on: ubuntu-22.04
+    env:
+      # List of platforms to exclude by default
+      EXCLUDED_PLATFORMS: 'alpine-linux-x64'
+    outputs:
+      windows-x64: ${{ steps.include.outputs.windows-x64 }}
+      windows-aarch64: ${{ steps.include.outputs.windows-aarch64 }}
+
+    steps:
+      - name: 'Checkout the scripts'
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            .github
+            make/conf/github-actions.conf
+
+      - name: 'Build JTReg'
+        id: jtreg
+        uses: ./.github/actions/build-jtreg
+
+      # TODO: Now that we are checking out the repo scripts, we can put the following code
+      # into a separate file
+      - name: 'Check what jobs to run'
+        id: include
+        run: |
+          # Determine which platform jobs to run
+
+          # Returns 'true' if the input platform list matches any of the platform monikers given as argument,
+          # 'false' otherwise.
+          # arg $1: platform name or names to look for
+
+          # Convert EXCLUDED_PLATFORMS from a comma-separated string to an array
+          IFS=',' read -r -a excluded_array <<< "$EXCLUDED_PLATFORMS"
+
+          function check_platform() {
+            if [[ $GITHUB_EVENT_NAME == workflow_dispatch ]]; then
+              input='${{ github.event.inputs.platforms }}'
+            elif [[ $GITHUB_EVENT_NAME == push ]]; then
+              if [[ '${{ !secrets.JDK_SUBMIT_FILTER || startsWith(github.ref, 'refs/heads/submit/') }}' == 'false' ]]; then
+                # If JDK_SUBMIT_FILTER is set, and this is not a "submit/" branch, don't run anything
+                >&2 echo 'JDK_SUBMIT_FILTER is set and not a "submit/" branch'
+                echo 'false'
+                return
+              else
+                input='${{ secrets.JDK_SUBMIT_PLATFORMS }}'
+              fi
+            fi
+
+            normalized_input="$(echo ,$input, | tr -d ' ')"
+            if [[ "$normalized_input" == ",," ]]; then
+              # For an empty input, assume all platforms should run, except those in the EXCLUDED_PLATFORMS list
+              for excluded in "${excluded_array[@]}"; do
+                if [[ "$1" == "$excluded" ]]; then
+                  echo 'false'
+                  return
+                fi
+              done
+              echo 'true'
+              return
+            else
+              # Check for all acceptable platform names
+              for part in $* ; do
+                if echo "$normalized_input" | grep -q -e ",$part," ; then
+                  echo 'true'
+                  return
+                fi
+              done
+
+              # If not explicitly included, check against the EXCLUDED_PLATFORMS list
+              for excluded in "${excluded_array[@]}"; do
+                if [[ "$1" == "$excluded" ]]; then
+                  echo 'false'
+                  return
+                fi
+              done
+            fi
+
+            echo 'false'
+          }
+
+          echo "windows-x64=$(check_platform windows-x64 windows x64)" >> $GITHUB_OUTPUT
+          echo "windows-aarch64=$(check_platform windows-aarch64 windows aarch64)" >> $GITHUB_OUTPUT
+
+  ###
+  ### Build jobs
+  ###
+
+  build-windows-x64:
+    name: windows-x64
+    needs: prepare
+    uses: ./OpenJDK/.github/workflows/build-windows.yml
+    with:
+      platform: windows-x64
+      msvc-toolset-version: '14.29'
+      msvc-toolset-architecture: 'x86.x64'
+      configure-arguments: ${{ github.event.inputs.configure-arguments }}
+      make-arguments: ${{ github.event.inputs.make-arguments }}
+    if: needs.prepare.outputs.windows-x64 == 'true'
+
+  build-windows-aarch64:
+    name: windows-aarch64
+    needs: prepare
+    uses: ./OpenJDK/.github/workflows/build-windows.yml
+    with:
+      platform: windows-aarch64
+      msvc-toolset-version: '14.29'
+      msvc-toolset-architecture: 'arm64'
+      make-target: 'hotspot'
+      extra-conf-options: '--openjdk-target=aarch64-unknown-cygwin'
+      configure-arguments: ${{ github.event.inputs.configure-arguments }}
+      make-arguments: ${{ github.event.inputs.make-arguments }}
+    if: needs.prepare.outputs.windows-aarch64 == 'true'
